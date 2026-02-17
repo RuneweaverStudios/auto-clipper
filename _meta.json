@@ -1,0 +1,23 @@
+{
+  "name": "auto-clipper",
+  "displayName": "AutoClipper",
+  "description": "Automatically create clips and videos from media files in a specified folder. Uses Agent Swarm for intelligent task delegation and supports cron-based scheduling.",
+  "version": "1.0.0",
+  "author": "OpenClaw",
+  "tags": [
+    "video",
+    "clip",
+    "automation",
+    "ffmpeg",
+    "cron",
+    "media"
+  ],
+  "platform": "darwin",
+  "dependencies": [
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "skills": [
+    "agent-swarm"
+  ]
+}
