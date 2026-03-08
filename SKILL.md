@@ -153,6 +153,33 @@ The `run.sh` launcher handles lock files to prevent overlapping runs and verifie
 | **Python 3.8+** | Runtime | Yes |
 | **Agent Swarm** | AI-driven clip planning (via OpenClaw gateway) | Optional |
 
+### Installing ffmpeg
+
+ffmpeg and ffprobe must be available on your PATH before using AutoClipper.
+
+```bash
+# macOS (Homebrew)
+brew install ffmpeg
+
+# Ubuntu / Debian
+sudo apt update && sudo apt install ffmpeg
+
+# Fedora / RHEL
+sudo dnf install ffmpeg
+
+# Windows (Chocolatey)
+choco install ffmpeg
+
+# Windows (Scoop)
+scoop install ffmpeg
+```
+
+Verify the installation:
+```bash
+ffmpeg -version
+ffprobe -version
+```
+
 ## Analysis Methods
 
 ### Scene Detection

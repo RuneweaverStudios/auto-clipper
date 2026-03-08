@@ -21,6 +21,9 @@
     "ffmpeg",
     "ffprobe"
   ],
+  "requires": {
+    "anyBins": ["ffmpeg", "ffprobe"]
+  },
   "skills": [
     "agent-swarm"
   ]
