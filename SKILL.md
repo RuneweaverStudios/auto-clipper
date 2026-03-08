@@ -1,102 +1,85 @@
 ---
 name: auto-clipper
 displayName: AutoClipper
-description: Automatically create clips and videos from media files in a specified folder. Uses Agent Swarm for intelligent task delegation and supports cron-based scheduling.
-version: 1.0.0
+description: Automatically scans a watch folder for media files, analyzes them using ffmpeg scene detection and loudness analysis, generates highlight clips, and organizes output. Supports cron-based scheduling and Agent Swarm integration.
+version: 1.1.0
 ---
 
 # AutoClipper
 
-**Automatic Video Clip & Highlight Generator for OpenClaw.**
-
-**v1.0.0 — Design draft.** Automatically scan a folder for media files, create clips/highlights using ffmpeg, and organize output. Cron-ready for scheduled automation.
+Automatic video clip and highlight generator for OpenClaw. Monitors a folder for new media files, detects interesting segments using scene detection and loudness analysis, creates clips with ffmpeg, and organizes output into date-stamped folders.
 
 ## Purpose
 
 AutoClipper enables OpenClaw agents to automatically:
+
 - **Monitor a watch folder** for new media files (videos, screen recordings, camera clips)
-- **Analyze media** to understand what's worth clipping (via Agent Swarm delegation)
-- **Generate clips** using ffmpeg (highlights, segments, trimmed videos)
-- **Produce compilations** by stitching multiple clips together
+- **Analyze media** using ffmpeg scene detection and audio loudness analysis
+- **Generate clips** from detected highlights (scene changes, loud/speech segments)
+- **Organize output** into date-based folders with configurable naming
 - **Schedule runs** via cron for fully automated workflows
+- **Delegate analysis** to Agent Swarm for intelligent clip planning (optional)
 
 ## Use Cases
 
-- **Screen recording highlights**: Auto-clip moments from Loom/obsidian recordings
-- **Meeting recaps**: Extract key segments from meeting recordings
+- **Screen recording highlights**: Auto-clip key moments from Loom/OBS recordings
+- **Meeting recaps**: Extract segments with speech activity from meeting recordings
 - **Content creation**: Batch-process raw footage into short clips
-- **Security camera clips**: Pull motion-triggered segments from camera feeds
-- **Gaming highlights**: Auto-clip "best of" moments from recordings
+- **Security camera clips**: Pull scene-change segments from camera feeds
+- **Gaming highlights**: Auto-clip action moments based on audio peaks
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      AutoClipper Skill                       │
-├─────────────────────────────────────────────────────────────┤
-│  1. Watch Folder (configurable input path)                  │
-│         ↓                                                   │
-│  2. Media Scanner (find new files, filter by extension)    │
-│         ↓                                                   │
-│  3. Agent Swarm delegation (analyze → clip strategy)             │
-│         ↓                                                   │
-│  4. Clip Engine (ffmpeg operations)                         │
-│         ↓                                                   │
-│  5. Output Organizer (save to output folder, optional SNS)  │
-└─────────────────────────────────────────────────────────────┘
+Watch Folder (configurable)
+       |
+       v
+Media Scanner (filter by extension, skip processed)
+       |
+       v
+Analysis Engine
+  +-- Scene Detection (ffmpeg select filter, threshold-based)
+  +-- Loudness Analysis (ffmpeg volumedetect, peak dB threshold)
+  +-- Agent Swarm (optional, for AI-driven clip planning)
+       |
+       v
+Clip Engine (ffmpeg trim / transcode)
+       |
+       v
+Output Organizer (date-based folders, deduplication)
 ```
 
-## Components
-
-### 1. Watch Folder Scanner
-- Monitors a configured input directory
-- Filters by file extensions: `.mp4`, `.mov`, `.mkv`, `.avi`, `.webm`
-- Tracks processed files (to avoid re-processing)
-- Configurable: `watchFolder`, `fileExtensions`, `processedLog`
-
-### 2. Media Analyzer (via Agent Swarm)
-- Delegates analysis to appropriate model (MiniMax for code/technical, Kimi for creative)
-- Determines:
-  - Which segments to clip (timestamp ranges)
-  - Clip duration targets
-  - Output format preferences
-- Returns structured clip plan: `[{start, end, label, priority}]`
-
-### 3. Clip Engine (ffmpeg)
-- **Trim**: Extract segments without re-encoding (fast)
-- **Transcode**: Convert to target format/codec
-- **Highlight**: Auto-detect "interesting" segments (via scene detection)
-- **Compile**: Stitch multiple clips into single video
-- **Overlay**: Add watermarks, timestamps, captions
-
-### 4. Output Manager
-- Organized output folder structure: `output/YYYY-MM-DD/`
-- Configurable naming: `{original}-{timestamp}-{index}.mp4`
-- Optional: Notify via OpenClaw message (Discord, WhatsApp, etc.)
-
-### 5. Cron Scheduler
-- Standalone script for cron integration
-- Configurable schedule: `0 * * * *` (hourly), `0 9 * * *` (daily at 9am)
-- Dry-run mode for testing
-- Lock file to prevent overlapping runs
-
 ## Configuration (config.json)
+
+All paths support `~` (home directory) and `$ENV_VAR` expansion.
 
 ```json
 {
   "watchFolder": "~/Downloads/Recordings",
   "outputFolder": "~/Videos/Clips",
-  "fileExtensions": [".mp4", ".mov", ".mkv"],
+  "fileExtensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
   "processedLog": "logs/processed.json",
+  "watchPollInterval": 60,
   "clipSettings": {
     "defaultDuration": 60,
     "minClipDuration": 10,
     "maxClipDuration": 300,
     "outputCodec": "h264",
-    "outputFormat": "mp4"
+    "outputFormat": "mp4",
+    "fastTrim": true
+  },
+  "sceneDetection": {
+    "enabled": true,
+    "threshold": 0.3,
+    "minSceneDuration": 5
+  },
+  "loudnessAnalysis": {
+    "enabled": true,
+    "peakThresholdDb": -10.0,
+    "minLoudSegmentDuration": 5
   },
   "intentRouter": {
-    "enabled": true,
+    "enabled": false,
     "model": "openrouter/minimax/minimax-m2.5"
   },
   "cron": {
@@ -110,131 +93,126 @@ AutoClipper enables OpenClaw agents to automatically:
 }
 ```
 
-## Tools Needed
+### Configuration Keys
 
-| Tool | Purpose | Required |
-|------|---------|----------|
-| **ffmpeg** | Video transcoding, trimming, clipping | Yes |
-| **ffprobe** | Media metadata extraction (duration, codec) | Yes |
-| **Agent Swarm** | Analyze media and determine clip strategy | Yes |
-| **OpenClaw message** | Send notifications when clips are ready | Optional |
-| **OpenClaw nodes** | Screen recording capture (live input) | Optional |
-| **file system** | Watch folder, output management | Yes |
+| Key | Type | Description |
+|-----|------|-------------|
+| `watchFolder` | string | Directory to monitor for new media files |
+| `outputFolder` | string | Base directory for generated clips |
+| `fileExtensions` | string[] | File extensions to process |
+| `processedLog` | string | Path (relative to skill dir) for tracking processed files |
+| `watchPollInterval` | int | Seconds between polls in watch mode |
+| `clipSettings.defaultDuration` | int | Default clip length in seconds |
+| `clipSettings.minClipDuration` | int | Minimum segment length to clip |
+| `clipSettings.maxClipDuration` | int | Maximum segment length to clip |
+| `clipSettings.fastTrim` | bool | Use `-c copy` for fast trimming (no re-encode) |
+| `sceneDetection.enabled` | bool | Enable ffmpeg scene detection |
+| `sceneDetection.threshold` | float | Scene change sensitivity (0.0-1.0, lower = more sensitive) |
+| `loudnessAnalysis.enabled` | bool | Enable audio loudness analysis |
+| `loudnessAnalysis.peakThresholdDb` | float | Volume threshold in dB (e.g., -10.0) |
+| `intentRouter.enabled` | bool | Enable Agent Swarm for AI-driven analysis |
 
-## Agent Swarm integration
+## CLI Usage
 
-When AutoClipper finds new media, it delegates analysis:
+```bash
+# Run once (scan, analyze, and create clips)
+python3 scripts/auto_clipper.py run
 
-```
-User task: "Analyze video and suggest clip timestamps for meeting highlights"
-→ router.spawn() → sessions_spawn(task, model)
-← Returns: [{start: "00:05:30", end: "00:07:45", label: "action item discussion"}, ...]
-```
+# Dry run (show what would be processed without creating clips)
+python3 scripts/auto_clipper.py run --dry-run
 
-**Prompt template for media analysis:**
-```
-Analyze this video file: {filename}
-Duration: {duration_seconds} seconds
-Extract: Key moments worth clipping as short highlights (30-90 seconds each)
-Output: JSON array of {start_timestamp, end_timestamp, description}
+# Force reprocess all files (ignore processed log)
+python3 scripts/auto_clipper.py run --force
+
+# Start continuous watcher mode
+python3 scripts/auto_clipper.py watch
+
+# Show current status
+python3 scripts/auto_clipper.py status
 ```
 
 ## Cron Setup
 
 ```bash
 # Add to crontab (crontab -e)
-# Run every hour at minute 0
-0 * * * * /Users/ghost/.openclaw/workspace/skills/auto-clipper/scripts/run.sh
+# Run every hour
+0 * * * * /path/to/auto-clipper/scripts/run.sh
 
-# Or run daily at 9 AM
-0 9 * * * /Users/ghost/.openclaw/workspace/skills/auto-clipper/scripts/run.sh --output daily
+# Run daily at 9 AM
+0 9 * * * /path/to/auto-clipper/scripts/run.sh
 ```
 
-## CLI Usage
+The `run.sh` launcher handles lock files to prevent overlapping runs and verifies ffmpeg is available.
 
-```bash
-# Run once (scan and process)
-python3 scripts/auto_clipper.py run
+## Dependencies
 
-# Dry run (show what would be processed)
-python3 scripts/auto_clipper.py run --dry-run
+| Tool | Purpose | Required |
+|------|---------|----------|
+| **ffmpeg** | Video trimming, transcoding, scene detection, loudness analysis | Yes |
+| **ffprobe** | Media metadata extraction (duration, codec info) | Yes |
+| **Python 3.8+** | Runtime | Yes |
+| **Agent Swarm** | AI-driven clip planning (via OpenClaw gateway) | Optional |
 
-# Force reprocess all files
-python3 scripts/auto_clipper.py run --force
+## Analysis Methods
 
-# Start continuous watcher (not cron-based)
-python3 scripts/auto_clipper.py watch
+### Scene Detection
 
-# Show status
-python3 scripts/auto_clipper.py status
-```
+Uses ffmpeg's `select` filter with a configurable threshold to detect visual scene changes. Segments between scene boundaries that meet the minimum duration are selected as clip candidates.
+
+### Loudness Analysis
+
+Uses ffmpeg's `volumedetect` filter to scan audio in windows, identifying segments where mean volume exceeds a configurable dB threshold. This catches speech, music, and action moments.
+
+### Agent Swarm Integration
+
+When `intentRouter.enabled` is `true`, AutoClipper delegates analysis to Agent Swarm via the OpenClaw gateway. The AI model returns structured clip plans with timestamps and descriptions.
 
 ## Directory Structure
 
 ```
 auto-clipper/
-├── SKILL.md              # This file
+├── SKILL.md              # Skill specification
 ├── _meta.json            # Skill metadata
 ├── config.json           # Configuration
-├── README.md             # Setup instructions
+├── README.md             # Quick-start guide
+├── requirements.txt      # Python dependencies
+├── .gitignore            # Git ignore rules
 ├── scripts/
-│   ├── auto_clipper.py   # Main entry point
-│   ├── scanner.py        # Watch folder scanner
-│   ├── clipper.py        # ffmpeg wrapper
-│   ├── analyzer.py       # Agent Swarm integration
-│   └── run.sh            # Cron launcher
+│   ├── auto_clipper.py   # Main entry point (scan, analyze, clip)
+│   └── run.sh            # Cron launcher with lock file support
 └── logs/
-    └── processed.json    # Track processed files
+    └── processed.json    # Tracks processed files (auto-generated)
 ```
+
+## Implementation Status
+
+### Phase 1: Core (Complete)
+- [x] Folder scanner with extension filtering
+- [x] Basic ffmpeg trim operation
+- [x] Processed file tracking
+- [x] CLI entry point with run/watch/status commands
+- [x] Config-driven paths (no hardcoded values)
+
+### Phase 2: Intelligence (Complete)
+- [x] Scene detection via ffmpeg select filter
+- [x] Loudness analysis via ffmpeg volumedetect
+- [x] Metadata extraction with ffprobe
+- [x] Segment deduplication and overlap resolution
+- [x] Agent Swarm integration stub (delegates to gateway when enabled)
+
+### Phase 3: Automation (Complete)
+- [x] Cron launcher script with lock file
+- [x] Continuous watcher mode with configurable poll interval
+- [x] Output organization in date-based folders
+- [x] ffmpeg binary check at startup
+
+### Phase 4: Advanced (TODO)
+- [ ] Multi-clip compilation (stitch segments into single video)
+- [ ] Overlay/watermark support
+- [ ] Notification system (Discord, WhatsApp)
+- [ ] Custom clip templates
 
 ## Keywords
 
-- **video**, **clip**, **clips**, **highlight**, **highlights**
-- **trim**, **cut**, **extract**, **segment**
-- **ffmpeg**, **transcode**, **encode**, **convert**
-- **folder**, **watch**, **monitor**, **automation**
-- **cron**, **schedule**, **batch**, **process**
-- **screen recording**, **meeting**, **recording**
-
-## Skill Name Ideas
-
-1. **AutoClipper** ✓ (chosen)
-2. **ClipForge**
-3. **MediaMason**
-4. **VideoHarvest**
-5. **HighlightHub**
-6. **ClipStream**
-7. **MediaSnip**
-8. **AutoTrim**
-
-## Implementation Phases
-
-### Phase 1: Core (MVP)
-- [ ] Folder scanner with extension filtering
-- [ ] Basic ffmpeg trim operation
-- [ ] Simple processed file tracking
-- [ ] CLI entry point
-
-### Phase 2: Intelligence
-- [ ] Agent Swarm integration for clip planning
-- [ ] Scene detection for auto-highlighting
-- [ ] Metadata extraction with ffprobe
-
-### Phase 3: Automation
-- [ ] Cron launcher script
-- [ ] Continuous watcher mode
-- [ ] Notification system
-- [ ] Output organization
-
-### Phase 4: Advanced
-- [ ] Multi-clip compilation
-- [ ] Overlay/watermark support
-- [ ] Custom clip templates
-- [ ] Node camera integration
-
-## Notes
-
-- **Performance**: Use `-c copy` for fast trimming (no re-encode)
-- **Storage**: Auto-cleanup processed files or move to archive
-- **Error handling**: Skip corrupted files gracefully, log failures
-- **Idempotency**: Same input file should not produce duplicate output
+video, clip, highlight, trim, ffmpeg, scene detection, loudness, audio analysis,
+automation, cron, watch folder, media processing, screen recording

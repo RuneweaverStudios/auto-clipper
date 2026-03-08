@@ -1,19 +1,22 @@
 {
   "schema": "openclaw.skill.v1",
   "name": "auto-clipper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "displayName": "AutoClipper",
-  "description": "Automatically create clips and videos from media files in a specified folder. Uses Agent Swarm for intelligent task delegation and supports cron-based scheduling.",
-  "author": "OpenClaw",
+  "description": "Automatically scans a watch folder for media files, analyzes them using ffmpeg scene detection and loudness analysis, generates highlight clips, and organizes output. Supports cron-based scheduling and Agent Swarm integration for intelligent clip planning.",
+  "author": "RuneweaverStudios",
   "tags": [
     "video",
     "clip",
     "automation",
     "ffmpeg",
-    "cron",
-    "media"
+    "media",
+    "scene-detection",
+    "highlights",
+    "cron"
   ],
   "platform": "darwin",
+  "main": "scripts/auto_clipper.py",
   "dependencies": [
     "ffmpeg",
     "ffprobe"

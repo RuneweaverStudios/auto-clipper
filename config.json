@@ -1,0 +1,37 @@
+{
+  "watchFolder": "~/Downloads/Recordings",
+  "outputFolder": "~/Videos/Clips",
+  "fileExtensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+  "processedLog": "logs/processed.json",
+  "watchPollInterval": 60,
+  "clipSettings": {
+    "defaultDuration": 60,
+    "minClipDuration": 10,
+    "maxClipDuration": 300,
+    "outputCodec": "h264",
+    "outputFormat": "mp4",
+    "fastTrim": true
+  },
+  "sceneDetection": {
+    "enabled": true,
+    "threshold": 0.3,
+    "minSceneDuration": 5
+  },
+  "loudnessAnalysis": {
+    "enabled": true,
+    "peakThresholdDb": -10.0,
+    "minLoudSegmentDuration": 5
+  },
+  "intentRouter": {
+    "enabled": false,
+    "model": "openrouter/minimax/minimax-m2.5"
+  },
+  "cron": {
+    "schedule": "0 * * * *",
+    "enabled": false
+  },
+  "notifications": {
+    "enabled": false,
+    "channel": "discord"
+  }
+}

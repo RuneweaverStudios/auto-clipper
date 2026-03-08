@@ -1,43 +1,89 @@
 # AutoClipper
 
-Automatic video clip and highlight generator for OpenClaw.
+Automatic video clip and highlight generator for OpenClaw. Scans a watch folder for media files, analyzes them using ffmpeg scene detection and loudness analysis, and creates clips organized into date-based output folders.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-brew install ffmpeg
+# 1. Install ffmpeg (required)
+brew install ffmpeg          # macOS
+sudo apt install ffmpeg      # Ubuntu/Debian
 
-# Configure watch folder in config.json
-# Edit watchFolder to point to your media folder
+# 2. Edit config.json to set your watch and output folders
+#    watchFolder  -> where your videos live
+#    outputFolder -> where clips are saved
 
-# Run once
+# 3. Run once
 python3 scripts/auto_clipper.py run
 
-# Enable cron scheduling
-# Edit config.json: cron.enabled = true
-# Add to crontab: 0 * * * * /path/to/auto-clipper/scripts/run.sh
+# 4. Or start continuous watcher
+python3 scripts/auto_clipper.py watch
 ```
 
 ## Requirements
 
-- **ffmpeg** - Video processing
-- **Python 3.8+** - Runtime
-- **OpenClaw** - With Agent Swarm (agent-swarm skill) configured
+- **ffmpeg** and **ffprobe** on your PATH
+- **Python 3.8+**
+- **OpenClaw** with Agent Swarm skill (optional, for AI-driven clip planning)
+
+## Usage
+
+```bash
+# Scan watch folder and create clips from detected highlights
+python3 scripts/auto_clipper.py run
+
+# Preview what would be processed (no clips created)
+python3 scripts/auto_clipper.py run --dry-run
+
+# Reprocess everything, ignoring the processed log
+python3 scripts/auto_clipper.py run --force
+
+# Continuous watch mode (polls every N seconds, configurable)
+python3 scripts/auto_clipper.py watch
+
+# Check status (watch folder, pending files, analysis settings)
+python3 scripts/auto_clipper.py status
+```
 
 ## Configuration
 
-Edit `config.json` to customize:
+Edit `config.json` to customize behavior. All paths support `~` and `$ENV_VAR` expansion.
 
-- `watchFolder` - Where to look for new videos
-- `outputFolder` - Where to save clips
-- `fileExtensions` - File types to process
-- `clipSettings` - Output format and quality
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `watchFolder` | `~/Downloads/Recordings` | Directory to monitor |
+| `outputFolder` | `~/Videos/Clips` | Where clips are saved |
+| `sceneDetection.threshold` | `0.3` | Scene change sensitivity (0-1) |
+| `loudnessAnalysis.peakThresholdDb` | `-10.0` | Audio peak threshold in dB |
+| `clipSettings.defaultDuration` | `60` | Fallback clip length in seconds |
+| `clipSettings.fastTrim` | `true` | Use stream copy (fast, no re-encode) |
 
-## Features
+## Analysis Methods
 
-- 🎬 Automatic clip extraction from media folders
-- 🧠 Agent Swarm integration for intelligent clip planning  
-- ⏰ Cron-ready for scheduled automation
-- 📁 Organized output with date-based folders
-- 🔔 Optional notifications when clips are ready
+AutoClipper uses two analysis methods to find interesting segments:
+
+1. **Scene Detection** -- ffmpeg's `select` filter detects visual transitions (cuts, fades). Segments between scene boundaries are clip candidates.
+
+2. **Loudness Analysis** -- ffmpeg's `volumedetect` identifies audio peaks (speech, music, action). Segments above the dB threshold become clip candidates.
+
+Both methods can be toggled independently in `config.json`. When Agent Swarm is enabled, AI-driven analysis supplements or overrides the heuristic results.
+
+## Cron Scheduling
+
+```bash
+# Add to crontab for hourly runs
+0 * * * * /path/to/auto-clipper/scripts/run.sh
+```
+
+The launcher script uses a lock file to prevent overlapping runs and checks for ffmpeg at startup.
+
+## How It Works
+
+1. Scans the watch folder for supported media files (`.mp4`, `.mov`, `.mkv`, `.avi`, `.webm`)
+2. Skips files already in the processed log
+3. Runs scene detection and loudness analysis on each file
+4. Creates clips for detected segments using ffmpeg
+5. Saves clips to a date-stamped output folder
+6. Records processed files to avoid reprocessing
+
+See `SKILL.md` for full architecture details and configuration reference.
