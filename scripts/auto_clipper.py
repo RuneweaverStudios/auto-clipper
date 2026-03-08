@@ -134,14 +134,23 @@ def create_clip(config, input_file, start=0, duration=None):
 
 
 def run_analysis(config, media_file):
-    """Analyze media using Agent Swarm (placeholder - requires gateway)"""
+    """Analyze media using Agent Swarm to determine clip strategy.
+
+    TODO: Implement Agent Swarm integration via gateway to analyze media content
+    and return intelligent clip points (e.g., scene changes, speech segments,
+    highlight moments). Requires a running gateway with Agent Swarm skill.
+    """
     if not config.get("intentRouter", {}).get("enabled", False):
         return None
-    
-    # This would use Agent Swarm to determine clip strategy
-    # For now, return None to use default clip settings
+
+    # Return a stub result indicating analysis is not yet available,
+    # so callers can distinguish "not enabled" (None) from "enabled but stub".
     print(f"Agent Swarm analysis not yet implemented for {media_file.name}")
-    return None
+    return {
+        "status": "stub",
+        "clips": [],
+        "message": "Agent Swarm analysis integration pending. Using default clip settings.",
+    }
 
 
 def run(dry_run=False, force=False):
@@ -169,8 +178,11 @@ def run(dry_run=False, force=False):
         print(f"  Duration: {duration:.1f}s")
         
         # Analyze (if Agent Swarm enabled)
-        clip_plan = run_analysis(config, f)
-        
+        analysis = run_analysis(config, f)
+        clip_plan = None
+        if analysis and analysis.get("status") != "stub" and analysis.get("clips"):
+            clip_plan = analysis["clips"]
+
         if clip_plan:
             for i, clip in enumerate(clip_plan):
                 create_clip(config, f, clip.get("start"), clip.get("duration"))
@@ -190,9 +202,29 @@ def run(dry_run=False, force=False):
 
 
 def watch_mode():
-    """Continuous watcher mode (placeholder)"""
-    print("Watch mode not yet implemented")
-    print("Use cron instead: 0 * * * * /path/to/run.sh")
+    """Continuous watcher mode: polls the watch folder at regular intervals.
+
+    TODO: Replace polling with filesystem event watching (e.g., watchdog library)
+    for more efficient file detection.
+    """
+    import time
+
+    config = load_config()
+    poll_interval = config.get("watchPollInterval", 60)  # seconds
+
+    print(f"AutoClipper watch mode started (polling every {poll_interval}s)")
+    print(f"Watching: {get_watch_folder(config)}")
+    print("Press Ctrl+C to stop.\n")
+
+    try:
+        while True:
+            files = scan_folder(config)
+            if files:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Found {len(files)} new file(s), processing...")
+                run()
+            time.sleep(poll_interval)
+    except KeyboardInterrupt:
+        print("\nWatch mode stopped.")
 
 
 def show_status():
