@@ -72,12 +72,20 @@ def scan_folder(config):
     return files
 
 
+def _validate_media_path(filepath):
+    """SECURITY: Validate file path is a real file, not a shell trick."""
+    p = Path(filepath).resolve()
+    if not p.is_file():
+        raise FileNotFoundError(f"Not a valid file: {filepath}")
+    return str(p)
+
 def get_duration(filepath):
     """Get video duration using ffprobe"""
     try:
+        safe_path = _validate_media_path(filepath)
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", 
-             "-of", "default=noprint_wrappers=1:nokey=1", str(filepath)],
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", safe_path],
             capture_output=True, text=True, timeout=30
         )
         return float(result.stdout.strip()) if result.stdout.strip() else 0
@@ -95,8 +103,9 @@ def create_clip(config, input_file, start=0, duration=None):
     
     settings = config.get("clipSettings", {})
     
-    # Build ffmpeg command
-    cmd = ["ffmpeg", "-y", "-i", str(input_file)]
+    # Build ffmpeg command (always use list args, never shell=True)
+    safe_input = _validate_media_path(input_file)
+    cmd = ["ffmpeg", "-y", "-i", safe_input]
     
     if start > 0:
         cmd.extend(["-ss", str(start)])
